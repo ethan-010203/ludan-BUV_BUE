@@ -1,0 +1,92 @@
+{
+  "countries": {
+    "Italy": { "label": "意大利 (Italy)" }
+  },
+  "registrations": {
+    "ChinaMainland": { "label": "中国大陆 (China Mainland)" }
+  },
+  "types": {
+    "packaging": { "label": "包装" }
+  },
+  "requirements": {
+    "Italy|ChinaMainland|packaging": {
+      "label": "意大利 - 中国大陆注册 - 包装",
+
+      "addressLocale": "zh-CN",
+      "autofillModule": "italy_seller_center",
+      "xlsxTemplate": "basic_info_v1",
+      "aiDocTypes": [
+        "cn_business_license",
+        "cn_id_card_front",
+        "cn_id_card_back"
+      ],
+
+      "fields": [
+        { "key": "id_card_front", "label": "身份证正面", "required": true },
+        { "key": "id_card_back", "label": "身份证反面", "required": true },
+        { "key": "business_license", "label": "营业执照", "required": true },
+        { "key": "shop_backend_screenshot", "label": "店铺后台截图", "required": true },
+        { "key": "basic_info", "label": "基础信息表", "required": true }
+      ],
+
+      "files": [
+        { "key": "id_card_front", "pattern": "身份证正面", "label": "身份证正面", "required": true, "matchType": "contains" },
+        { "key": "id_card_back", "pattern": "身份证反面", "label": "身份证反面", "required": true, "matchType": "contains" },
+        { "key": "business_license", "pattern": "营业执照", "label": "营业执照", "required": true, "matchType": "contains", "showInAutofill": true, "autofillStatusLabel": "营业执照文件", "convertImageToPdf": true },
+        { "key": "shop_backend_screenshot", "pattern": "店铺后台截图", "label": "店铺后台截图", "required": true, "matchType": "contains", "allowedExtensions": [".jpg", ".jpeg", ".png"], "showInAutofill": true, "convertImageToPdf": false },
+        { "key": "basic_info", "pattern": ".xlsx", "label": "基础信息表", "required": true, "matchType": "endsWith" }
+      ],
+
+      "placeholders": {
+        "shop_backend_screenshot": { "kind": "png", "filename": "店铺后台截图_临时占位.png", "text": "店铺后台截图（临时占位）" }
+      },
+
+      "modules": [
+        {
+          "title": "公司信息",
+          "fields": [
+            { "key": "公司中文名称",                    "source": "xlsx",       "cell": "C5" },
+            { "key": "营业执照",                        "source": "file_path",  "fileKey": "business_license" },
+            { "key": "营业执照号码/注册号",             "source": "xlsx",       "cell": "C11" },
+            { "key": "公司/个体经营注册地址(中文)",     "source": "ai_license", "aiField": "住所" },
+            { "key": "邮编",                            "source": "xlsx",       "cell": "C10" },
+            { "key": "公司经营范围（英文）",            "source": "xlsx_translate_to_en", "cell": "B20" }
+          ]
+        },
+        {
+          "title": "法人代表信息",
+          "fields": [
+            { "key": "上传法人代表证件信息",            "source": "idcard_or_passport" },
+            { "key": "法人代表身份证（人像面）",        "source": "file_path",       "fileKey": "id_card_front" },
+            { "key": "法人代表身份证（国徽面）",        "source": "file_path",       "fileKey": "id_card_back" },
+            { "key": "法人/个人代表中文名",             "source": "ai_idcard_front", "aiField": "姓名" },
+            { "key": "法人/个人代表身份证号",           "source": "ai_idcard_front", "aiField": "身份证号" },
+            { "key": "法人/个人代表拼音名（英文名）",   "source": "ai_idcard_front", "aiField": "拼音名" },
+            { "key": "法人/个人代表出生日期",           "source": "ai_idcard_front", "aiField": "出生日期" },
+            { "key": "法人/个人代表身份证地址",         "source": "ai_idcard_front", "aiField": "住址" },
+            { "key": "法人联系电话",                    "source": "xlsx",            "cell": "C15", "stripSpaces": true },
+            { "key": "法人联系邮箱",                    "source": "xlsx",            "cell": "C14" }
+          ]
+        },
+        {
+          "title": "店铺信息",
+          "fields": [
+            { "key": "店铺链接",                        "source": "xlsx", "cell": "C17" },
+            { "key": "公司英文名称",                    "source": "xlsx", "cell": "D5" },
+            { "key": "公司/个体经营注册地址（英文）",   "source": "xlsx", "cell": "D6" }
+          ]
+        },
+        {
+          "title": "产品信息",
+          "fields": [
+            { "key": "产品英文名称",                    "source": "xlsx_translate_to_en", "cell": "B20" },
+            { "key": "包装材料（大类）1",               "source": "default", "value": "纸" },
+            { "key": "包装材料（小类）1",               "source": "default", "value": "单一纸材料的包装" },
+            { "key": "包装材料（大类）2",               "source": "default", "value": "塑料" },
+            { "key": "包装材料（小类）2",               "source": "default", "value": "PP/PE/PS/PET软包装" }
+          ]
+        }
+      ]
+    }
+  }
+}

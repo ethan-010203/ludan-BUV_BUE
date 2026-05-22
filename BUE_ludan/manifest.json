@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "EPR Registration Assistant",
+  "version": "0.2.0",
+  "description": "Check EPR registration document folders by country, registration place, and EPR type. Sidebar with AI detection and autofill.",
+  "action": {
+    "default_title": "EPR Registration Assistant",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "side_panel": {
+    "default_path": "popup.html"
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "permissions": ["storage", "sidePanel", "activeTab", "scripting", "tabs"],
+  "host_permissions": ["https://api.moonshot.cn/*", "http://*/*", "https://*/*"]
+}
