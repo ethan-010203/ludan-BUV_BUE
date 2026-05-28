@@ -371,6 +371,12 @@ document.addEventListener("DOMContentLoaded", async () => {
    - 底部出现 2 行以 "<<" 大量填充的机读字符（MRZ，例如 "POCHNQIAN<<YING<<<<...")。
 
    **不要**与身份证混淆——身份证主体上**找不到"护照"或"PASSPORT"字样**，标题永远是"中华人民共和国居民身份证"，字段是"姓名 / 性别 / 民族 / 出生 / 住址 / 公民身份号码"而非"护照号 / 国籍 / 有效期"。
+8. 企业信用报告：图片是**国家企业信用信息公示系统出具的"企业信用信息公示报告"页面**（多页 PDF 中的某一页），命中以下任一关键特征即可判定：
+   - 显著位置出现"企业信用信息公示报告"作为主标题；
+   - 出现"国家企业信用信息公示系统"字样（页眉或正文）；
+   - 大段中文表格（如"基本信息"/"股东信息"/"主要人员"/"行政许可信息"/"行政处罚信息"/"经营异常名录"等章节标题）+ 上方带有"企业信用信息公示报告"或"信用信息公示"标题。
+   备注：与"营业执照"区分——**营业执照**是单张横版证件、标题就是"营业执照"、通常带红章；**企业信用报告**是多页表格式 PDF 文档、标题含"企业信用信息公示报告"、**不带红章**。仅看到"营业执照"四字而**没有**"信用信息公示"标题 → 仍是营业执照，不要误判为本类型。
+9. 身份证正反面：图片中**同时出现一张身份证人像面 + 一张身份证国徽面**（常见排版：上下排列、左右并排，或扫描件把两面拼在同一张图里）。两面都要可辨：人像面有头像 + "公民身份号码"，国徽面有"中华人民共和国居民身份证"标题 + "有效期限"。仅看到一面 → 走 2 或 3，不要返回本类型。
 
 **必须返回"未知类型"的情况（强制）：**
 - 网页截图、浏览器界面、后台管理系统、卖家中心、商家中心、表单、Dashboard
@@ -385,19 +391,24 @@ document.addEventListener("DOMContentLoaded", async () => {
    - 满屏简体中文 + 红章 + "营业执照"标题 → 候选"营业执照"
    - 繁体中文 / 双语 + "Certificate of Incorporation" 或 "Business Registration Certificate" 或 "公司註冊證書" 或 "商業登記證" → 候选"香港公司注册证书"
    - **图片左半边有人物头像照片 + 照片正上方 / 紧邻位置出现 "护照" 或 "PASSPORT" 字样** → 候选"护照"（这是护照的固定排版，命中即判定，无需再找 MRZ 或全部字段）
+   - 中文表格式 PDF 页面 + "企业信用信息公示报告" / "国家企业信用信息公示系统" 标题或页眉 → 候选"企业信用报告"
    - 满屏英文但不符合 HK 证书 / 护照特征 → "未知类型"
 3. 最后核对该类型要求的字段是否**全部**可见，缺任何一个 → "未知类型"
 4. 公司章程例外：只要命中"章程"标题或"第一章"等章节标题之一即可返回"公司章程"
 5. 护照例外：只要命中"左侧人像 + 相邻位置的 '护照' / 'PASSPORT' 字样"核心特征即可返回"护照"，不必额外核对其他字段
+6. 企业信用报告例外：只要命中"企业信用信息公示报告"标题 或 "国家企业信用信息公示系统"字样之一即可返回"企业信用报告"，不必逐条核对子表格
+7. 身份证正反面例外：图片中**同时存在**两张身份证（人像面 + 国徽面）时返回"身份证正反面"，**不要**回退到"身份证正面"或"身份证反面"
 
 只输出以下之一，不要任何解释、不要任何标点：
 营业执照
 身份证正面
 身份证反面
+身份证正反面
 完税证明
 公司章程
 香港公司注册证书
 护照
+企业信用报告
 未知类型
 
 绝对严禁编造，宁可错判为"未知类型"也不要乱猜。`;
@@ -439,9 +450,16 @@ document.addEventListener("DOMContentLoaded", async () => {
       // 配置里的带 "CR" 后缀的 label，避免 AI 必须精确复读 "CR" 二字。
       // "香港公司注册证书" 放在 "营业执照" 之前：includes() 是子串匹配，万一 AI 违反
       // prompt 返回了完整句子（含两个关键词），更具体的 HK 标签先命中更安全。
+      // "企业信用报告" 放在 "营业执照" 之前：同理，AI 偶发把"企业信用信息公示报告"四字
+      // 与"营业执照"放在一句话里时，先匹配更具体的"企业信用报告"避免落到营业执照。
+      // "身份证正反面" 放在 "身份证正面" / "身份证反面" 之前：includes() 子串匹配，
+      // AI 输出"身份证正反面"时不能先命中"身份证正面"。返回特殊 label 由 tryMatch
+      // 识别后同时塞进 id_card_front + id_card_back 两个 key。
       const typeMapping = {
         '香港公司注册证书': '香港公司注册证书CR',
+        '企业信用报告': '企业信用报告',
         '营业执照': '营业执照',
+        '身份证正反面': '身份证正反面',
         '身份证正面': '身份证正面',
         '身份证反面': '身份证反面',
         '完税证明': '完税证明',
@@ -911,11 +929,45 @@ document.addEventListener("DOMContentLoaded", async () => {
       city = cityMatch[1];
       rest = rest.slice(city.length);
     }
+    // 城市后缀缺失兜底：地址形如 "福建省福州高新区..."（"福州"后无"市"字，紧接"高新区"），
+    // 上面的 cityMatch 因为要求 市|自治州|地区|盟 后缀必抓不到城市；district 正则又会
+    // 一口吞下"福州高新区"作为区，结果 cascader 拿到 region="福建省 / 福州高新区"
+    // 选不到 福州市 这一级（"福州高新区"里包含"福州"，但 matchItem 第 1 趟 includes
+    // 检查的是【option title 是否在 valueStr 里】，不是反过来）。
+    // 修法：cityMatch 没命中时，用 CHINA_PREFECTURE_TO_PROVINCE 的 key（如"福州市"）
+    // 去前缀匹配 rest，若 rest 以 "福州"（剥掉"市"字）开头 → 补全为"福州市"作为 city。
+    // 这样下一步 district 抠到的就是"高新区"（原"福州高新区" 的"福州"被吃掉）。
+    if (!city) {
+      const provMap = (typeof window !== "undefined" && window.CHINA_PREFECTURE_TO_PROVINCE) || {};
+      // 先按 stem 长度倒序，优先匹配长前缀（如"内蒙古"先于"内"，避免"内蒙古"被截成"内"）
+      const stems = Object.keys(provMap)
+        .filter((k) => k.endsWith("市"))
+        .map((k) => k.slice(0, -1))
+        .sort((a, b) => b.length - a.length);
+      for (const stem of stems) {
+        if (rest.startsWith(stem) && rest.length > stem.length) {
+          city = stem + "市";
+          rest = rest.slice(stem.length);
+          break;
+        }
+      }
+    }
     let district = "";
     const distMatch = rest.match(/^([^省市区县旗]{1,10}?(?:市|区|县|旗|自治县))/);
     if (distMatch) {
       district = distMatch[1];
       rest = rest.slice(district.length);
+    }
+    // 非行政"区"后缀剔除：高新区 / 经开区 / 经济开发区 / 工业园区 / 新区 / 高新技术产业
+    // 开发区 等都是经济功能区命名，不是民政部的行政区，cascader 里不会有对应的 leaf。
+    // 例：福建省福州高新区马排村... 实际行政归属是 闽侯县上街镇，硬选"高新区"会让 cascader
+    // 永远到不了 leaf、antd 不 commit，结果连 省+市 也保不住。这里把这类伪区缩回 detail，
+    // 让 region 只到 省+市，再由 handleCascader 的"无 leaf 兜底"去随便挑一个真实区 commit。
+    const NON_ADMIN_DISTRICT_RE = /^(高新|经开|经济开发|工业园|工业|开发|高新技术产业开发|科技园|新|示范|保税|物流园|综合保税)区$/;
+    if (district && NON_ADMIN_DISTRICT_RE.test(district)) {
+      // 把伪区还回 detail（保持原始字符串完整，让用户能手动核对）
+      rest = district + rest;
+      district = "";
     }
     // 县级市处理（同 splitAddressPrefix）：把"浙江省义乌市XXX路"补全为
     // "浙江省 / 金华市 / 义乌市 / XXX路"，让 cascader 能选完整三级。
@@ -1287,12 +1339,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (!apiKey || !base64Data) return {};
     const prompt = `这是一张中国营业执照图片。请仔细识别图中的字段，以严格的JSON格式输出以下信息：
 {
+  "公司名称": "执照上'名称'或'公司名称'字段原文，例如'义乌市XX电子商务有限公司'、'义乌市XX商行'。原样输出，不要补全或简化。",
+  "法定代表人": "执照上'法定代表人'字段原文（个体工商户为'经营者'字段原文），例如'张三'。原样输出。",
   "类型": "公司类型，例如'有限责任公司'、'有限责任公司(自然人投资或控股)'、'个体工商户'、'股份有限公司'等。原样输出执照上写的内容。",
   "成立日期": "成立日期或注册日期，输出格式 YYYY-MM-DD（如 2024-09-15）。如果只有'注册日期'就用注册日期。",
   "核准日期": "核准日期，通常出现在营业执照右下角'登记机关'印章下方，标签可能是'核准日期'、'登记日期'或位于登记机关下方未标注的日期文本。输出格式 YYYY-MM-DD（如 2024-09-15）。如果执照上没有此字段，值为null。**与'成立日期'区分**：成立日期通常在执照左侧字段区，核准日期位于右下角登记机关印章附近。",
   "住所": "执照上'住所'或'经营场所'或'营业场所'字段的完整地址原文，例如'浙江省金华市义乌市XX街道XX号'。",
   "登记机关": "登记机关（或发照机关）的完整名称，必须补全为'省+市+区/县+机关'或'省+市+机关'或'直辖市+区+机关'的完整行政区划前缀格式。请结合执照上'住所'字段里的省/市信息补全前缀，不要重复。示例：\n    - 执照登记机关是'义乌市市场监督管理局'，住所在浙江省金华市义乌市 → 输出'浙江省金华市义乌市市场监督管理局'\n    - 执照登记机关是'金华市市场监督管理局'，住所在浙江省金华市 → 输出'浙江省金华市市场监督管理局'（不要写成'浙江省金华市金华市市场监督管理局'）\n    - 执照登记机关是'海淀区市场监督管理局'，住所在北京市海淀区 → 输出'北京市海淀区市场监督管理局'\n    - 执照登记机关是'广东省市场监督管理局' → 原样输出'广东省市场监督管理局'",
-  "注册资本": "注册资本金额，必须转为阿拉伯数字 + '元'结尾。规则：识别执照上的金额（无论是中文大写如'壹佰万元'还是阿拉伯数字如'100万元'），统一换算为元的整数。例如：'壹佰万元整' → '1000000元'，'100万元人民币' → '1000000元'，'5000万元' → '50000000元'，'壹拾万元' → '100000元'。如果执照上没有此字段（个体工商户通常没有），值为null。"
+  "注册资本": "注册资本金额，必须转为阿拉伯数字 + '元'结尾。规则：识别执照上的金额（无论是中文大写如'壹佰万元'还是阿拉伯数字如'100万元'），统一换算为元的整数（先按面值乘以 10000，再四舍五入到整数；不要把小数点当成千分位分隔符）。例如：'壹佰万元整' → '1000000元'；'100万元人民币' → '1000000元'；'5000万元' → '50000000元'；'壹拾万元' → '100000元'；'2.000000万人民币' → '20000元'（2 万 = 20000 元，小数点后的 0 是有效数字而非千分位）；'1.5万元' → '15000元'。如果执照上没有此字段（个体工商户通常没有），值为null。"
 }
 
 只输出JSON对象，不要任何额外解释。每个字段如果识别不到，值为null。`;
@@ -1326,6 +1380,112 @@ document.addEventListener("DOMContentLoaded", async () => {
       statusLog(`[AI提取] 异常: ${e.message}`);
       return {};
     }
+  }
+
+  // AI: extract structured fields from a 企业信用报告（国家企业信用信息公示系统）首页（基本信息表）
+  // 报告通常是 20+ 页 PDF；matchAi 阶段只把首个命中页（一般是含"基本信息"表的封面/首页）的
+  // imageData 存下来，因此这里只对单页提取——典型首页就含本模块需要的全部字段。
+  async function extractCreditReportFields(base64Data, mimeType) {
+    const prompt = `这是一张"企业信用信息公示报告"页面（来自国家企业信用信息公示系统）。请仔细识别"基本信息"表格中的字段，以严格的JSON格式输出：
+{
+  "公司名称": "'名称'字段原文，例如'义乌市XX电子商务有限公司'。原样输出，不要补全或简化。",
+  "法定代表人": "'法定代表人'字段原文（个体工商户为'经营者'字段原文），例如'张三'。原样输出。",
+  "统一社会信用代码": "18位'统一社会信用代码'，字母+数字（最后一位可能是X），例如'91330782MA28XXXXX1'。",
+  "类型": "'类型'字段原文，例如'有限责任公司(自然人投资或控股)'、'个体工商户'、'股份有限公司'等。原样输出。",
+  "成立日期": "'成立日期'/'注册日期'，输出格式 YYYY-MM-DD（例如 2024-09-15）。",
+  "营业期限自": "'营业期限自'对应的日期，输出格式 YYYY-MM-DD。识别不到则为 null。",
+  "营业期限至": "'营业期限至'对应的日期。如果原文是'长期'/'无固定期限'/空白/'/'/'-' 等表示没有截止日期，输出空字符串 ''；否则输出 YYYY-MM-DD。",
+  "注册资本": "注册资本金额，必须转为阿拉伯数字 + '元'结尾。识别原文（中文大写或阿拉伯数字 + 万元/万人民币/万 等单位），统一换算为元的整数（先按面值乘以 10000，再四舍五入到整数；不要把小数点当成千分位分隔符）。例如：'壹佰万元整' → '1000000元'；'100万元人民币' → '1000000元'；'5000万元' → '50000000元'；'2.000000万人民币' → '20000元'（2 万 = 20000 元，小数点后的 0 是有效数字而非千分位）；'1.5万元' → '15000元'。如果识别不到则为 null。",
+  "住所": "'住所'/'经营场所'/'营业场所'字段的完整地址原文。",
+  "登记机关": "登记机关完整名称，必须补全为'省+市+区/县+机关'或'省+市+机关'或'直辖市+区+机关'的完整行政区划前缀格式。请结合'住所'字段里的省/市信息补全前缀，不要重复。示例：\n    - 登记机关是'义乌市市场监督管理局'，住所在浙江省金华市义乌市 → 输出'浙江省金华市义乌市市场监督管理局'\n    - 登记机关是'金华市市场监督管理局'，住所在浙江省金华市 → 输出'浙江省金华市市场监督管理局'\n    - 登记机关是'海淀区市场监督管理局'，住所在北京市海淀区 → 输出'北京市海淀区市场监督管理局'\n    - 登记机关是'广东省市场监督管理局' → 原样输出'广东省市场监督管理局'",
+  "经营范围": "'经营范围'字段完整原文，原样输出（含全部条款，不要省略不要换行）。",
+  "核准日期": "'核准日期'，输出格式 YYYY-MM-DD。",
+  "报告生成时间": "页面顶部'报告生成时间'字段（含年月日时分秒），例如原文'2025年01月15日09时30分45秒' → 输出 '2025-01-15 09:30:45'。如果识别不到则为 null。"
+}
+
+只输出JSON对象，不要任何额外解释。每个字段如果识别不到，值为null。`;
+    const fields = await callVisionJson(base64Data, mimeType, prompt, "AI企业信用报告");
+    if (fields) {
+      // 标准化日期字段（YYYY-MM-DD）
+      for (const k of ["成立日期", "营业期限自", "核准日期"]) {
+        if (fields[k]) fields[k] = normalizeDateLike(fields[k]);
+      }
+      // 营业期限至 特殊处理：空字符串 / 长期 类提示统一为空字符串（由 business_term_end 兜底为"长期"）
+      if (fields.营业期限至 != null) {
+        const raw = String(fields.营业期限至).trim();
+        if (!raw || /^[/\-—–]$/.test(raw) || /(长期|无固定期限|无期限|无)/i.test(raw)) {
+          fields.营业期限至 = "";
+        } else {
+          fields.营业期限至 = normalizeDateLike(raw);
+        }
+      }
+      // 报告生成时间：尝试规整为 "YYYY-MM-DD HH:mm:ss"
+      if (fields.报告生成时间) {
+        const raw = String(fields.报告生成时间).trim();
+        const m = raw.match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})\D+(\d{1,2})\D+(\d{1,2})\D+(\d{1,2})/);
+        if (m) {
+          fields.报告生成时间 = `${m[1]}-${String(+m[2]).padStart(2, "0")}-${String(+m[3]).padStart(2, "0")} ${String(+m[4]).padStart(2, "0")}:${String(+m[5]).padStart(2, "0")}:${String(+m[6]).padStart(2, "0")}`;
+        }
+      }
+    }
+    return fields || {};
+  }
+
+  // 拆分身份证 "有效期限" 原文为 (开始日期, 结束日期)
+  // 输入示例：
+  //   "2020.05.20-2040.05.20"      → { start: "2020-05-20", end: "2040-05-20" }
+  //   "2020.05.20-长期"            → { start: "2020-05-20", end: "长期" }
+  //   "2020.05.20 - 长期"          → 同上（容忍空格/全/半角分隔符）
+  //   ""                          → { start: "", end: "" }
+  // 分隔符容忍：-, —, –, ~, 至, 到（中文符号 + 英文符号）
+  function splitIdcardValidity(raw) {
+    if (raw == null) return { start: "", end: "" };
+    const s = String(raw).trim();
+    if (!s) return { start: "", end: "" };
+    // 优先匹配两段日期：YYYY[.-/]MM[.-/]DD <sep> YYYY[.-/]MM[.-/]DD | 长期
+    const parts = s.split(/\s*[-—–~]\s*|\s*至\s*|\s*到\s*/);
+    if (parts.length >= 2) {
+      const startRaw = parts[0];
+      const endRaw = parts.slice(1).join("-"); // 防御性合并（极少出现）
+      const start = normalizeDateLike(startRaw);
+      // 结束端：长期/无固定期限 等关键词原样保留"长期"；否则归一日期
+      const end = /(长期|无固定期限|永久|无限)/i.test(endRaw) ? "长期" : normalizeDateLike(endRaw);
+      return { start, end };
+    }
+    // 单一日期（极少见，AI 漏抓结束端时）：当成开始日期
+    return { start: normalizeDateLike(s), end: "" };
+  }
+
+  // 比较 营业执照 与 企业信用报告 的 (公司名称, 法定代表人, 住所) 是否一致
+  // 输入：aiLicense / aiCreditReport（可能为空对象）
+  // 返回："是"  / "否（XXX不一致）" / ""（两份都缺时无法判定）
+  // - 容差：去除所有空白与全/半角括号差异后做 strict equality（地址里的空格 / 换行 / 全半角括号差异不算不一致）
+  // - 任一文档关键字段缺失时跳过该字段比较；三个字段全缺 → 返回空字符串
+  function diffLicenseVsCreditReport(aiLicense, aiCreditReport) {
+    const lic = aiLicense || {};
+    const cr = aiCreditReport || {};
+    // 整份缺失（AI 没返回任何关键字段）→ 无法判定，返回空
+    const licHasAny = !!(lic.公司名称 || lic.法定代表人 || lic.住所);
+    const crHasAny  = !!(cr.公司名称 || cr.法定代表人 || cr.住所);
+    if (!licHasAny || !crHasAny) return "";
+
+    const norm = (s) => String(s || "")
+      .replace(/\s+/g, "")
+      .replace(/[（）()]/g, "")
+      .toLowerCase();
+    const pairs = [
+      { label: "公司名", a: lic.公司名称,    b: cr.公司名称 },
+      { label: "法定代表人", a: lic.法定代表人, b: cr.法定代表人 },
+      { label: "住所",   a: lic.住所,       b: cr.住所 }
+    ];
+    const diffs = [];
+    for (const p of pairs) {
+      // 任一份缺该字段则跳过比较（避免误报）
+      if (!p.a || !p.b) continue;
+      if (norm(p.a) !== norm(p.b)) diffs.push(`${p.label}不一致`);
+    }
+    if (diffs.length === 0) return "是";
+    return `否（${diffs.join("、")}）`;
   }
 
   // Compose all module data given the detection result
@@ -1400,13 +1560,85 @@ document.addEventListener("DOMContentLoaded", async () => {
       statusLog(`[AI提取] 完成（${Date.now() - t0}ms）`);
     }
 
+    // Source: AI 企业信用报告 fields（Italy|China 组合用）
+    //
+    // 关键背景：matchAi 阶段 AI 一旦在某页命中"企业信用报告"标题/页眉就 break（line ~4670），
+    // 只把那一页的 imageData 存到 found 记录里。但实际报告版面里：
+    //   - 第 1 页（封面）：大标题"企业信用信息公示报告" + 报告生成时间 + 公司名 + 二维码
+    //   - 第 2~3 页起：才是"基本信息"表（统一社会信用代码 / 类型 / 成立日期 / 住所 / 登记机关 / 经营范围 …）
+    // 所以单页提取只能拿到 报告生成时间 / 公司名，"基本信息"全空。
+    // 解法：跨页扫描 + 合并（首个非空胜出）+ 关键基本信息字段齐了就提前停止。
+    let aiCreditReport = {};
+    const creditReportFound = result.found.find(f => f.key === "credit_report");
+    if (creditReportFound) {
+      const fileObj = (creditReportFound.file && creditReportFound.file.file instanceof File)
+        ? creditReportFound.file.file : null;
+      const ext = fileObj ? getFileExtension(fileObj.name) : "";
+      statusLog(`[AI提取] 解析企业信用报告字段...`);
+      const t0 = Date.now();
+
+      if (fileObj && ext === ".pdf") {
+        // 多页 PDF：逐页 AI 提取并合并
+        try {
+          // pdfToImages 默认 maxPages=5；信用报告"基本信息"可能在第 2~5 页之间，
+          // 偶尔也有第 6/7 页的（前面有签名/目录页），这里放宽到 8 页。
+          const pages = await pdfToImages(fileObj, 8);
+          statusLog(`[AI提取] 信用报告共扫 ${pages.length} 页`);
+          const merged = {};
+          const fillIfMissing = (k, v) => {
+            if (v == null) return;
+            if (merged[k] == null || merged[k] === "") merged[k] = v;
+          };
+          // 关键标志：基本信息表里的核心字段都拿到 → 已抓到 基本信息 那一页，停止。
+          // 用 4 个字段做强校验，避免只命中"公司名"就误停（封面页通常也有公司名）。
+          const enoughCollected = () =>
+            !!(merged.公司名称 && merged.统一社会信用代码 && merged.住所 && merged.登记机关);
+
+          for (let p = 0; p < pages.length; p++) {
+            const t1 = Date.now();
+            const fields = await extractCreditReportFields(pages[p], "image/jpeg");
+            statusLog(`[AI提取] 信用报告 第${p + 1}/${pages.length}页（${Date.now() - t1}ms）`);
+            for (const [k, v] of Object.entries(fields || {})) {
+              fillIfMissing(k, v);
+            }
+            if (enoughCollected()) {
+              statusLog(`[AI提取] 信用报告 基本信息表已抓到（第${p + 1}页），跳过剩余 ${pages.length - p - 1} 页`);
+              break;
+            }
+          }
+          aiCreditReport = merged;
+        } catch (e) {
+          statusLog(`[AI提取] 企业信用报告 PDF 解析异常: ${e.message}`);
+          // 兜底：多页扫描失败时退回 matchAi 缓存的单页 imageData
+          if (creditReportFound.imageData) {
+            aiCreditReport = await extractCreditReportFields(creditReportFound.imageData, creditReportFound.mimeType);
+          }
+        }
+      } else if (creditReportFound.imageData) {
+        // 图片格式（罕见）：单页 AI 调用
+        aiCreditReport = await extractCreditReportFields(creditReportFound.imageData, creditReportFound.mimeType);
+      }
+
+      statusLog(`[AI提取] 完成（${Date.now() - t0}ms）`);
+      // 与 营业执照 同样：补全 登记机关 完整行政区划前缀。
+      if (aiCreditReport && aiCreditReport.登记机关) {
+        const before = String(aiCreditReport.登记机关);
+        const after = normalizeRegistrationAuthority(before, aiCreditReport.住所);
+        if (after !== before) {
+          statusLog(`[规范化] 信用报告 登记机关: ${before} → ${after}`);
+        }
+        aiCreditReport.登记机关 = after;
+      }
+    }
+
     // 持久化原始 AI 结果，供后续 buildAutofillPlan 使用（如 姓拼音 / 名拼音 不在显示模块里）
     lastAiData = {
       license: aiLicense || {},
       idCardFront: aiIdCardFront || {},
       idCardBack: aiIdCardBack || {},
       hkCr: aiHkCr || {},
-      passport: aiPassport || {}
+      passport: aiPassport || {},
+      creditReport: aiCreditReport || {}
     };
 
     // Document-type label for "上传法人代表证件信息":
@@ -1459,11 +1691,47 @@ document.addEventListener("DOMContentLoaded", async () => {
           case "ai_idcard_back":
             value = aiIdCardBack[f.aiField] != null ? String(aiIdCardBack[f.aiField]) : "";
             break;
+          case "idcard_validity_start": {
+            // Italy|China 身份证有效期限开始日期：从 身份证反面 有效期限 原文拆出 起始端
+            const raw = aiIdCardBack["有效期限"] != null ? String(aiIdCardBack["有效期限"]) : "";
+            value = splitIdcardValidity(raw).start;
+            break;
+          }
+          case "idcard_validity_end": {
+            // Italy|China 身份证有效期限结束日期：从 身份证反面 有效期限 原文拆出 结束端（"长期" 关键词保留）
+            const raw = aiIdCardBack["有效期限"] != null ? String(aiIdCardBack["有效期限"]) : "";
+            value = splitIdcardValidity(raw).end;
+            break;
+          }
           case "ai_hk_cr":
             value = aiHkCr[f.aiField] != null ? String(aiHkCr[f.aiField]) : "";
             break;
           case "ai_passport":
             value = aiPassport[f.aiField] != null ? String(aiPassport[f.aiField]) : "";
+            break;
+          case "ai_credit_report":
+            value = aiCreditReport[f.aiField] != null ? String(aiCreditReport[f.aiField]) : "";
+            break;
+          case "postal_from_credit_report_address": {
+            // Italy|China 公司信息.邮编：从 企业信用报告 的 住所 解析邮编
+            const addr = aiCreditReport["住所"] != null ? String(aiCreditReport["住所"]) : "";
+            value = getPostalCodeForAddress(addr);
+            if (addr && !value) {
+              statusLog(`[邮编] 未能从信用报告住所解析出邮编: "${addr}"`);
+            } else if (value) {
+              statusLog(`[邮编] 信用报告住所 → ${value}（来源住所: "${addr}"）`);
+            }
+            break;
+          }
+          case "business_term_end": {
+            // Italy|China 公司信息.营业期限结束日期：信用报告 营业期限至 为空 → 长期，否则原值
+            const end = aiCreditReport["营业期限至"] != null ? String(aiCreditReport["营业期限至"]).trim() : "";
+            value = end || "长期";
+            break;
+          }
+          case "license_credit_consistency":
+            // Italy|China 公司信息.是否是最新的营业执照：对比 营业执照 / 信用报告 的 公司名/法定代表人/住所
+            value = diffLicenseVsCreditReport(aiLicense, aiCreditReport);
             break;
           case "identity_field": {
             const usingPassport = !!passportFound && !(idFrontFound || idBackFound);
@@ -1656,9 +1924,12 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     renderFileSummary(uploadedFiles);
     renderDetectionResults(result);
-    renderMissingItems(result.missing);
+    renderMissingItems(result.missing, result);
     renderResultSummary(result);
-    renderAutofillButton(result);
+    // 注意：buildModuleData 还要继续跑 AI 提取（营业执照 / 信用报告 / 身份证等），
+    // 在它完成前 lastModulesData=null，此时点「一键注入」会拿不到数据。
+    // 先以 aiBusy 模式渲染：面板可见、文件状态可读，但按钮禁用 + 文案「⏳ 等待AI检查完成再注入」。
+    renderAutofillButton(result, { aiBusy: true });
 
     // Show result area first so users see detection result while modules are being built
     document.getElementById("result-area").style.display = "";
@@ -1668,6 +1939,8 @@ document.addEventListener("DOMContentLoaded", async () => {
       const modulesData = await buildModuleData(result);
       lastModulesData = modulesData;
       renderModules(modulesData);
+      // AI 字段已就绪：重渲面板把按钮启用、文案恢复成「⚡ 一键注入信息到当前页面」
+      renderAutofillButton(result);
       // 模块构建完成（包含 AI 提取的"法人/个人代表拼音名（英文名）"），
       // 刷新签名面板默认值（用户已手动编辑过的话不会被覆盖）
       showSignaturePanel().catch((e) => console.warn("[signature] refresh err:", e));
@@ -1677,6 +1950,19 @@ document.addEventListener("DOMContentLoaded", async () => {
       statusLog(`[模块] 构建失败: ${e.message}`);
       lastModulesData = null;
       renderModules(null);
+      // AI 阶段失败：按钮保持禁用（aiBusy 渲染留下的状态），改写底部状态条提示错误，
+      // 避免用户看到「等待AI检查完成」却永远等不到。
+      const btn = document.getElementById("autofill-btn");
+      const status = document.getElementById("autofill-status");
+      if (btn) {
+        btn.disabled = true;
+        btn.textContent = "⚠️ AI 检查失败，无法注入";
+        btn.title = "请重新点击「开始检查」";
+      }
+      if (status) {
+        status.textContent = `❌ AI 字段提取失败：${e.message}\n请检查网络 / API Key 后点「开始检查」重试`;
+        status.style.color = "#dc2626";
+      }
     }
   }
 
@@ -1685,13 +1971,20 @@ document.addEventListener("DOMContentLoaded", async () => {
   //   showInAutofill: true             —— 该文件要在面板里显示一行状态。
   //   autofillStatusLabel: "营业执照文件" —— 可选，面板里显示的文案（表单字段名与文件名可能不一致）。
   //   convertImageToPdf: true          —— 可选，上传前会把图片转成 PDF，面板会提示。
-  function renderAutofillButton(result) {
+  // opts.aiBusy=true 时（runValidation 还在跑 buildModuleData 的 AI 字段提取阶段）：
+  //   面板已显示但按钮保持禁用 + 文案提示「等待AI检查完成再注入」，
+  //   防止用户在 lastModulesData 还没就绪时点击导致拿到不完整数据。
+  //   buildModuleData 成功后再不带 aiBusy 调一次，把按钮启用、文案恢复。
+  function renderAutofillButton(result, opts = {}) {
+    const aiBusy = !!opts.aiBusy;
     const area = document.getElementById("autofill-area");
     const status = document.getElementById("autofill-status");
     const btn = document.getElementById("autofill-btn");
 
     area.style.display = "";
-    btn.disabled = false;
+    btn.disabled = aiBusy;
+    btn.title = aiBusy ? "等待AI检查完成再注入" : "";
+    btn.textContent = aiBusy ? "⏳ 等待AI检查完成再注入" : "⚡ 一键注入信息到当前页面";
 
     const isImg = (n) => /\.(jpe?g|png|gif|webp|bmp)$/i.test(n || "");
     const tag = (item) => item?.placeholder ? "（临时占位）" : "";
@@ -1711,7 +2004,11 @@ document.addEventListener("DOMContentLoaded", async () => {
       );
     }
     if (lines.length > 0) {
-      lines.push("点击按钮：填充文本字段 + 上传文件 + 选择日期 / 省市区");
+      lines.push(aiBusy
+        ? "⏳ AI 正在提取证件 / 信用报告字段，完成后按钮会自动启用…"
+        : "点击按钮：填充文本字段 + 上传文件 + 选择日期 / 省市区");
+    } else if (aiBusy) {
+      lines.push("⏳ AI 正在提取证件 / 信用报告字段，完成后按钮会自动启用…");
     }
     status.textContent = lines.join("\n");
     status.style.color = "#475569";
@@ -2032,7 +2329,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     updateFileCount();
     renderDetectionResults(lastValidationResult);
-    renderMissingItems(lastValidationResult.missing);
+    renderMissingItems(lastValidationResult.missing, lastValidationResult);
     renderResultSummary(lastValidationResult);
     renderAutofillButton(lastValidationResult);
     refreshFilePathModuleFields();
@@ -2198,7 +2495,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     // 全角/半角括号在比较时会被规范化，避免页面用"（中文）"而 plan 写"(中文)"导致匹配失败。
     function findInputByLabelText(labelText, selector) {
       const normParen = (s) => String(s || "").replace(/[（]/g, "(").replace(/[）]/g, ")");
+      const stripWs = (s) => normParen(s).replace(/\s+/g, "");
       const targetNorm = normParen(labelText);
+      const targetCompact = stripWs(labelText);
       const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
       const candidates = [];
       let n;
@@ -2208,11 +2507,31 @@ document.addEventListener("DOMContentLoaded", async () => {
       }
       let best = null;
       let bestDepth = Infinity;
+      // 算法 A：从 labelText 单文本节点 walk-up，找最近 selector 命中（最常用路径）
       for (const start of candidates) {
         let scope = start;
         for (let d = 0; d < 12 && scope; d++) {
           const inp = scope.querySelector(selector);
           if (inp && isVisible(inp)) {
+            if (d < bestDepth) { best = inp; bestDepth = d; }
+            break;
+          }
+          scope = scope.parentElement;
+        }
+      }
+      if (best) return best;
+      // 算法 B（fallback）：从 selector 候选 walk-up，找最近祖先的 textContent
+      // （去空白后）含 labelText。覆盖 Vue+antd 把 label 拆成多个 span/text-node 的情况
+      // （此时 nodeValue 单条都不含完整 labelText，但容器 textContent 拼起来含）。
+      // 取深度最小的命中：身份证有效期限结束日期 行内的 input 在 4-6 层就到含 label 的 row，
+      // 而其他行的 input 要走到包含本 row 的 form 顶级容器才匹配上 → 自然落选。
+      const inps = Array.from(document.querySelectorAll(selector));
+      for (const inp of inps) {
+        if (!isVisible(inp)) continue;
+        let scope = inp.parentElement;
+        for (let d = 0; d < 12 && scope; d++) {
+          const tn = stripWs(scope.textContent || "");
+          if (tn.includes(targetCompact)) {
             if (d < bestDepth) { best = inp; bestDepth = d; }
             break;
           }
@@ -2257,6 +2576,14 @@ document.addEventListener("DOMContentLoaded", async () => {
       const m = String(s || "").match(/(\d{4})\D+(\d{1,2})\D+(\d{1,2})/);
       if (!m) return null;
       return { year: +m[1], month: +m[2], day: +m[3] };
+    }
+
+    // Parse "HH:MM:SS" or "HH:MM" → {hour, minute, second} or null
+    // 用于 datetime picker 的时间部分（如 企业信用报告生成时间 "2026-05-19 14:48:15"）
+    function parseTime(s) {
+      const m = String(s || "").match(/(\d{1,2}):(\d{1,2})(?::(\d{1,2}))?/);
+      if (!m) return null;
+      return { hour: +m[1], minute: +m[2], second: m[3] != null ? +m[3] : 0 };
     }
 
     // ----- Handlers -----
@@ -2470,8 +2797,45 @@ document.addEventListener("DOMContentLoaded", async () => {
       const date = parseDate(item.value);
       if (!date) return { ok: false, error: `日期格式无法解析: ${item.value}` };
 
-      const input = findInputByPlaceholder(item.placeholder);
-      if (!input) return { ok: false, error: `未找到 datepicker placeholder="${item.placeholder}"` };
+      // 定位优先级：elementSelector > labelText > placeholder
+      // 含逗号的 id（如 "0,2,0,1,0"）必须用属性选择器 [id="..."]，不能用 CSS #id。
+      // elementSelector 可指向 .ant-calendar-picker 包装层（如 Italy 卖家中心的 <span id="..." class="ant-calendar-picker">），
+      // 也可直接指向 input.ant-calendar-picker-input；handler 自动 fallback 到内部 input。
+      let input = null;
+      if (item.elementSelector) {
+        try {
+          const el = document.querySelector(item.elementSelector);
+          if (el) {
+            input = el.tagName === "INPUT" ? el : el.querySelector("input.ant-calendar-picker-input, input");
+          }
+        } catch (_) { /* invalid selector, fall through */ }
+        if (!input) return { ok: false, error: `未找到 datepicker elementSelector="${item.elementSelector}"` };
+      } else if (item.labelText) {
+        // 当同 form-row 内有多个 datepicker（如 Italy 法人代表信息行内
+        // "请选择开始日期"+"请选择结束日期" 两个 input），且页面上同 placeholder
+        // 还在别的行（公司信息 营业期限）也有的情况下：labelText 把搜索锁定到目标
+        // form-row，placeholder 进一步在 row 内挑出对应那一个 input。两者都给时
+        // 优先用 placeholder 收窄；找不到再回退到通用 ant-calendar-picker-input。
+        if (item.placeholder) {
+          const esc = String(item.placeholder).replace(/"/g, '\\"');
+          input = findInputByLabelText(item.labelText, `input.ant-calendar-picker-input[placeholder="${esc}"]`);
+        }
+        if (!input) input = findInputByLabelText(item.labelText, "input.ant-calendar-picker-input");
+        if (!input) return { ok: false, error: `未找到 datepicker labelText="${item.labelText}"${item.placeholder ? ` placeholder="${item.placeholder}"` : ""}` };
+      } else {
+        // placeholder 模式：可选 pickIndex 在多个同 placeholder input 中按 DOM 顺序选第 N 个
+        // （负数从尾部数）。用于 labelText 不可靠的场景，详见 handleClick 同名注释。
+        if (typeof item.pickIndex === "number") {
+          const all = Array.from(document.querySelectorAll("input, textarea"))
+            .filter((el) => (el.getAttribute("placeholder") || "").includes(item.placeholder));
+          if (all.length === 0) return { ok: false, error: `未找到 datepicker placeholder="${item.placeholder}"` };
+          const idx = item.pickIndex < 0 ? all.length + item.pickIndex : item.pickIndex;
+          input = all[Math.max(0, Math.min(idx, all.length - 1))];
+        } else {
+          input = findInputByPlaceholder(item.placeholder);
+        }
+        if (!input) return { ok: false, error: `未找到 datepicker placeholder="${item.placeholder}"` };
+      }
 
       // Open the panel: ant-calendar opens on click of the picker container
       const picker = input.closest(".ant-calendar-picker") || input;
@@ -2484,10 +2848,60 @@ document.addEventListener("DOMContentLoaded", async () => {
       if (!panel) return { ok: false, error: "点击后未弹出日历" };
 
       const r = await pickDateInPanel(panel, date);
-      // Try to close: blur + body click
+      if (!r.ok) {
+        input.blur();
+        await sleep(60);
+        return r;
+      }
+
+      // Datetime picker 模式：底部有 a.ant-calendar-ok-btn（"确定"按钮）。
+      // 普通 date picker 在 day cell 点击后即 commit + 自动关闭，没有 ok 按钮；
+      // datetime picker 必须 (1) 选时间 + (2) 点 确定 才会 commit，否则 blur 时面板会回滚。
+      const okBtn = panel.querySelector(".ant-calendar-ok-btn");
+      if (okBtn) {
+        const time = parseTime(item.value);
+        if (time) {
+          // 若当前在 date 子面板（time-picker 未展开），点击底部 "选择时间" 链接切换。
+          // antd v3 footer 链接 class："ant-calendar-time-picker-btn"。展开后会出现
+          // .ant-calendar-time-picker，里面有 3 个 .ant-calendar-time-picker-select（H/M/S 列）。
+          if (!panel.querySelector(".ant-calendar-time-picker")) {
+            const tpBtn = panel.querySelector(".ant-calendar-time-picker-btn");
+            if (tpBtn) {
+              tpBtn.click();
+              await sleep(220);
+            }
+          }
+          const cols = panel.querySelectorAll(".ant-calendar-time-picker-select");
+          const targets = [time.hour, time.minute, time.second];
+          for (let i = 0; i < Math.min(cols.length, targets.length); i++) {
+            const lis = cols[i].querySelectorAll("li");
+            let hit = null;
+            for (const li of lis) {
+              if (parseInt((li.textContent || "").trim(), 10) === targets[i]) { hit = li; break; }
+            }
+            if (hit) {
+              hit.click();
+              await sleep(80);
+            }
+          }
+        }
+        // 点 确定 提交。注意：disabled-cell 等会让 ok 按钮被禁用 → 检测一下避免无效点击。
+        if (!okBtn.classList.contains("ant-calendar-ok-btn-disabled")) {
+          okBtn.click();
+          await sleep(160);
+        }
+        const tStr = time
+          ? ` ${String(time.hour).padStart(2, "0")}:${String(time.minute).padStart(2, "0")}:${String(time.second).padStart(2, "0")}`
+          : "";
+        input.blur();
+        await sleep(60);
+        return { ok: true, msg: `已选择 ${date.year}-${date.month}-${date.day}${tStr}` };
+      }
+
+      // 普通 date picker：blur 即可关闭面板
       input.blur();
       await sleep(60);
-      return r.ok ? { ok: true, msg: `已选择 ${date.year}-${date.month}-${date.day}` } : r;
+      return { ok: true, msg: `已选择 ${date.year}-${date.month}-${date.day}` };
     }
 
     // 找到包含 labelText 的最近表单容器（同时含 .btn_warp 或日期范围选择器）。
@@ -2778,6 +3192,22 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
           }
           // 所有候选都不含目标，接受到目前为止的部分选中（如只选了省级）
+          // antd 的 Cascader 只在选到 leaf 时才 commit 表单值。如果到第 N 级匹配不到、
+          // 而我们已经选了 >=2 级（省 + 市），直接 break 会让 antd 当作"放弃选择"
+          // → 之前点过的 省/市 也不写入。这里兜底：随便点当前级的【第一个叶子】（无
+          // ant-cascader-menu-item-expand class 的项），让路径走到底强制 commit。
+          // 仅在已选过 >= 1 级时启用，避免在第 1 级失败时乱跑。
+          if (picked.length >= 1) {
+            const leaf = Array.from(items).find(
+              (li) => !li.classList.contains("ant-cascader-menu-item-expand"),
+            );
+            if (leaf) {
+              const leafText = (leaf.getAttribute("title") || leaf.textContent).trim();
+              leaf.click();
+              picked.push(leafText);
+              await sleep(220);
+            }
+          }
           break;
         }
         const text = (target.getAttribute("title") || target.textContent).trim();
@@ -2848,19 +3278,79 @@ document.addEventListener("DOMContentLoaded", async () => {
       const selector = item.selector;
       if (!selector) return { ok: false, error: "缺少 selector" };
 
-      const all = Array.from(document.querySelectorAll(selector));
-      const visible = all.filter(isVisible);
-      const pool = visible.length > 0 ? visible : all;
-      if (pool.length === 0) {
-        return { ok: false, error: `未找到 selector="${selector}"` };
+      let pool;
+      if (item.labelText) {
+        // labelText 作用域：当同一 selector 在页面多处出现（如 Italy 公司信息 营业期限
+        // 与法人代表信息 身份证有效期限 都有 .btn_warp 长期 按钮），用 labelText 把候选
+        // 限定在含该文本的最近表单容器内。
+        // 算法 A（首选）：找含 labelText 的文本节点，从父级 walk-up 12 层逐层 querySelectorAll(selector)，
+        //   命中即收录。覆盖大多数 antd v3 表单（label 在单个文本节点内）。
+        // 算法 B（fallback）：从 selector 候选 walk-up，找最近祖先 textContent（去空白）含 labelText。
+        //   覆盖 Vue+antd 把 label 拆成多个 span/text-node 的情况（单文本节点不含完整 labelText，
+        //   但容器拼起来含），此时算法 A 会一无所获。
+        const normParen = (s) => String(s || "").replace(/[（]/g, "(").replace(/[）]/g, ")");
+        const stripWs = (s) => normParen(s).replace(/\s+/g, "");
+        const targetNorm = normParen(item.labelText);
+        const targetCompact = stripWs(item.labelText);
+        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+        const labelNodes = [];
+        let n;
+        while ((n = walker.nextNode())) {
+          const v = normParen(n.nodeValue).trim();
+          if (v && v.includes(targetNorm)) labelNodes.push(n.parentElement);
+        }
+        const matches = [];
+        const seen = new Set();
+        // 算法 A
+        for (const start of labelNodes) {
+          let scope = start;
+          for (let d = 0; d < 12 && scope; d++) {
+            const found = scope.querySelectorAll(selector);
+            if (found.length > 0) {
+              for (const el of found) {
+                if (!seen.has(el)) { seen.add(el); matches.push({ el, depth: d }); }
+              }
+              break;
+            }
+            scope = scope.parentElement;
+          }
+        }
+        // 算法 B：算法 A 没命中时再跑（按 labelText 拆碎的页面会走到这里）
+        if (matches.length === 0) {
+          const cands = Array.from(document.querySelectorAll(selector));
+          for (const el of cands) {
+            let scope = el.parentElement;
+            for (let d = 0; d < 12 && scope; d++) {
+              const tn = stripWs(scope.textContent || "");
+              if (tn.includes(targetCompact)) {
+                if (!seen.has(el)) { seen.add(el); matches.push({ el, depth: d }); }
+                break;
+              }
+              scope = scope.parentElement;
+            }
+          }
+        }
+        matches.sort((a, b) => a.depth - b.depth);
+        const visible = matches.map((m) => m.el).filter(isVisible);
+        pool = visible.length > 0 ? visible : matches.map((m) => m.el);
+        if (pool.length === 0) {
+          return { ok: false, error: `未找到 click selector="${selector}" labelText="${item.labelText}"` };
+        }
+      } else {
+        const all = Array.from(document.querySelectorAll(selector));
+        const visible = all.filter(isVisible);
+        pool = visible.length > 0 ? visible : all;
+        if (pool.length === 0) {
+          return { ok: false, error: `未找到 selector="${selector}"` };
+        }
       }
 
       let hit;
       if (item.textContent) {
         const stripSpace = (s) => String(s || "").replace(/\s+/g, "");
         const want = stripSpace(item.textContent);
-        hit = pool.find((el) => stripSpace(el.textContent).includes(want));
-        if (!hit) {
+        const filtered = pool.filter((el) => stripSpace(el.textContent).includes(want));
+        if (filtered.length === 0) {
           const seen = pool
             .map((el) => `"${(el.textContent || "").trim().substring(0, 24)}"`)
             .join(", ");
@@ -2870,8 +3360,36 @@ document.addEventListener("DOMContentLoaded", async () => {
               `selector="${selector}" 命中 ${pool.length} 个，但无一含文本 "${item.textContent}"。候选: [${seen}]`,
           };
         }
+        // pickIndex：在按 textContent 过滤后的候选里挑第 N 个（0-based，负数从尾部数）。
+        // 用于按【DOM 出现顺序】定位（label 被 Vue/antd 拆碎到 textContent 也无法 substring
+        // 命中时的兜底）。例：意大利卖家中心两处 .btn_warp 长期按钮，公司信息在前、法人
+        // 代表在后，对应 pickIndex 0 / -1（或 1）。
+        const idx = typeof item.pickIndex === "number"
+          ? (item.pickIndex < 0 ? filtered.length + item.pickIndex : item.pickIndex)
+          : 0;
+        hit = filtered[Math.max(0, Math.min(idx, filtered.length - 1))];
       } else {
-        hit = pool[0];
+        const idx = typeof item.pickIndex === "number"
+          ? (item.pickIndex < 0 ? pool.length + item.pickIndex : item.pickIndex)
+          : 0;
+        hit = pool[Math.max(0, Math.min(idx, pool.length - 1))];
+      }
+
+      // 真正发出 click 的目标默认就是 hit（外层 selector 命中的元素）。
+      // 仅在调用方显式设置 item.clickInnerText:true 时才重定向到内部含 textContent
+      // 的叶子节点。
+      // 默认走 hit 是因为：(a) 绝大多数 Vue 表单 @click 绑在外层 selector 命中的元素上，
+      // (b) 即便绑在内层，事件从外层冒泡也能触发；反之绑在外层、点击内层时，部分模板
+      // 会用 event.target===this.$el 守卫，导致点击内层无效（典型例：意大利卖家中心
+      // .btn_warp 长期按钮的 @click 绑在外层 div，点 inner span 无法切换长期状态）。
+      let clickTarget = hit;
+      if (item.clickInnerText && item.textContent) {
+        const stripSpace = (s) => String(s || "").replace(/\s+/g, "");
+        const want = stripSpace(item.textContent);
+        const inner = Array.from(hit.querySelectorAll("span, button, a, div"))
+          .filter((el) => el.children.length === 0 && stripSpace(el.textContent).includes(want))
+          .sort((a, b) => stripSpace(a.textContent).length - stripSpace(b.textContent).length)[0];
+        if (inner) clickTarget = inner;
       }
 
       // skipIfHasClass：点之前先看匹配到的元素是不是已经处于目标状态（如卡片的 "active" class）。
@@ -2880,8 +3398,37 @@ document.addEventListener("DOMContentLoaded", async () => {
         const label = (hit.textContent || selector).trim().substring(0, 24);
         return { ok: true, skipped: true, msg: `"${label}" 已有 class="${item.skipIfHasClass}"，跳过点击` };
       }
+      // skipIfChildVisible / skipIfChildHidden：点击元素的"激活态"由内部子元素的可见性反映
+      // （而不是元素自身的 class）。例：意大利卖家中心 .btn_warp 长期按钮，激活态是
+      // 内部 <svg class="active_icon" style="display:none"> 的 display:none 被移除。
+      // 用法：
+      //   skipIfChildVisible: ".active_icon"
+      //     → 若子元素当前可见就跳过点击（即"已激活则不再激活，避免反向取消"）
+      //   skipIfChildHidden: ".active_icon"
+      //     → 若子元素当前隐藏 / 不存在就跳过点击（即"未激活则不去取消激活"）
+      // 二者互补：长期模式用前者保证幂等激活；具体日期模式用后者保证幂等取消。
+      if (item.skipIfChildVisible) {
+        const child = hit.querySelector(item.skipIfChildVisible);
+        if (child && isVisible(child)) {
+          const label = (hit.textContent || selector).trim().substring(0, 24);
+          return { ok: true, skipped: true, msg: `"${label}" 子元素 ${item.skipIfChildVisible} 已可见，跳过点击` };
+        }
+      }
+      if (item.skipIfChildHidden) {
+        const child = hit.querySelector(item.skipIfChildHidden);
+        if (!child || !isVisible(child)) {
+          const label = (hit.textContent || selector).trim().substring(0, 24);
+          return { ok: true, skipped: true, msg: `"${label}" 子元素 ${item.skipIfChildHidden} 不可见，跳过点击` };
+        }
+      }
 
-      hit.click();
+      // 发出 click：单次 native el.click()。
+      //   重要：不要叠加 dispatchEvent(MouseEvent) 三件套 —— 部分 Vue toggle handler
+      //   会把 click + 自身合成的 mousedown 算成两次激活，开-关相互抵消，导致点击表面
+      //   "成功"（active 视觉效果闪过），实际表单状态没切。
+      //   handleBusinessTerm 在 poland 的 .btn_warp 长期按钮上一直用单次 toggleBtn.click()
+      //   就 OK，跟它对齐。
+      clickTarget.click();
       highlight(hit);
 
       // 可选：轮询等指定 selector 出现（点完后通常会有 Vue 异步重挂载）
@@ -3227,6 +3774,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const AUTOFILL_REGISTRY = {
     poland_seller_center: () => import("./autofill/poland_seller_center.js"),
     france_seller_center: () => import("./autofill/france_seller_center.js"),
+    italy_seller_center: () => import("./autofill/italy_seller_center.js"),
   };
 
   // 启动时校验：每个组合声明的 autofillModule 是否已在 AUTOFILL_REGISTRY 注册。
@@ -4442,8 +4990,30 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Helper: try matching an AI label to a requirement and add to found.
     // imageData (base64) and mimeType are stored so we can later run AI extraction
     // (e.g., extracting structured fields from a business license).
+    //
+    // 特殊 label "身份证正反面"：一张图里同时含正反两面。把同一份 file/imageData 同时塞进
+    // id_card_front + id_card_back 两个 key（前提是当前组合的 files 里仍登记着这两个 key），
+    // 后续 ai_idcard_front / ai_idcard_back 提取会各自从这张合一图里抽出对应字段。
+    // 展示层由 mergeIdCardDisplay 后处理把两条 found 折叠成一条「身份证正反面 ✓」。
     const tryMatch = (file, aiLabel, idx, pageInfo = "", imageData = null, mimeType = null) => {
       if (!aiLabel) return false;
+      if (aiLabel === "身份证正反面") {
+        let any = false;
+        for (const reqKey of ["id_card_front", "id_card_back"]) {
+          const req = regConfig.files.find(r => r.key === reqKey && !found.some(f => f.key === reqKey));
+          if (req) {
+            found.push({
+              ...req,
+              file: { ...file, path: file.path + pageInfo },
+              imageData,
+              mimeType,
+              _fromCombined: true
+            });
+            any = true;
+          }
+        }
+        return any;
+      }
       const matchedReq = regConfig.files.find(req => req.label === aiLabel && !found.some(f => f.key === req.key));
       if (matchedReq) {
         found.push({
@@ -4525,6 +5095,17 @@ document.addEventListener("DOMContentLoaded", async () => {
                       break;
                     }
                     // 当前组合无 公司章程 需求项 → 不 break，继续扫后续页
+                  }
+                  // 企业信用报告：与公司章程同源逻辑——多页表格式 PDF（常见 20+ 页），
+                  // 整份 PDF 都属于"企业信用报告"，命中任意一页即可代表整个文件，上传也是整份原文件。
+                  // 防御同上：仅在当前组合配置了 "企业信用报告" 需求项（tryMatch 真的命中）时才 break。
+                  if (aiLabel === "企业信用报告") {
+                    if (tryMatch(file, aiLabel, i, "", pages[p], "image/jpeg")) {
+                      anyMatched = true;
+                      statusLog(`[AI] ${file.name} 命中企业信用报告，跳过剩余 ${pages.length - p - 1} 页`);
+                      break;
+                    }
+                    // 当前组合无 企业信用报告 需求项 → 不 break，继续扫后续页
                   }
                   const pageSuffix = isMultiPage ? ` (第${p + 1}页)` : "";
                   if (tryMatch(file, aiLabel, i, pageSuffix, pages[p], "image/jpeg")) {
@@ -4668,12 +5249,55 @@ document.addEventListener("DOMContentLoaded", async () => {
     return result;
   }
 
+  // ============================================================================
+  // 身份证正反面合并展示：当 mergeIdCardDisplay=true 时（如 Italy|China 组合），
+  // 把 id_card_front + id_card_back 在 UI 上合并为一行「身份证正反面」。
+  // ============================================================================
+  // 底层 found / missing 仍保留 id_card_front 与 id_card_back 两条记录（这样
+  // ai_idcard_front / ai_idcard_back 字段提取 + autofill 模块的两个 input 上传逻辑
+  // 都不用改），只在渲染层折叠：
+  //   - 两面都 found → 检测列表显示一行「<路径> → 身份证正反面」，缺失列表无该项
+  //   - 仅一面 found → 检测列表显示该面找到的一行，缺失列表显示「缺少身份证反面/正面」
+  //   - 两面都 missing → 缺失列表显示一行「缺少身份证正反面」
+  // 该函数仅产出 UI 用的扁平条目，不修改原始 result.found / result.missing。
+  // ============================================================================
+  function buildIdCardDisplay(result) {
+    const front = (result.found || []).find(f => f.key === "id_card_front");
+    const back = (result.found || []).find(f => f.key === "id_card_back");
+    const missFront = (result.missing || []).find(m => m.key === "id_card_front");
+    const missBack = (result.missing || []).find(m => m.key === "id_card_back");
+
+    const foundRow = (front && back && front.file?.path === back.file?.path)
+      ? { kind: "combined", label: "身份证正反面", path: front.file.path }
+      : null;
+
+    const otherFound = [];
+    if (!foundRow) {
+      if (front) otherFound.push({ kind: "single", label: "身份证正面", path: front.file?.path });
+      if (back)  otherFound.push({ kind: "single", label: "身份证反面", path: back.file?.path });
+    }
+
+    let missingRow = null;
+    if (missFront && missBack)      missingRow = { label: "身份证正反面", required: missFront.required };
+    else if (missFront)             missingRow = { label: "身份证正面",   required: missFront.required };
+    else if (missBack)              missingRow = { label: "身份证反面",   required: missBack.required };
+
+    return { foundRow, otherFound, missingRow };
+  }
+
   function renderDetectionResults(result) {
     const container = document.getElementById("detection-list");
     container.innerHTML = "";
 
+    // mergeIdCardDisplay 模式：把 id_card_front + id_card_back 折叠成一行。
+    // 仅当当前组合 currentReqConfig.mergeIdCardDisplay=true 时生效；其他组合行为不变。
+    const mergeIdCard = !!currentReqConfig?.mergeIdCardDisplay;
+    const idCardKeys = new Set(["id_card_front", "id_card_back"]);
+    const idDisplay = mergeIdCard ? buildIdCardDisplay(result) : null;
+
     // Matched files: path → label
     result.found.forEach(item => {
+      if (mergeIdCard && idCardKeys.has(item.key)) return; // 由 idDisplay 统一渲染
       const el = document.createElement("div");
       el.className = "detection-item detection-found";
       el.innerHTML = `
@@ -4683,6 +5307,30 @@ document.addEventListener("DOMContentLoaded", async () => {
       `;
       container.appendChild(el);
     });
+
+    if (idDisplay) {
+      if (idDisplay.foundRow) {
+        const el = document.createElement("div");
+        el.className = "detection-item detection-found";
+        el.innerHTML = `
+          <span class="detection-path">${escapeHtml(idDisplay.foundRow.path || "")}</span>
+          <span class="detection-arrow">→</span>
+          <span class="detection-label">${escapeHtml(idDisplay.foundRow.label)}</span>
+        `;
+        container.appendChild(el);
+      } else {
+        idDisplay.otherFound.forEach(row => {
+          const el = document.createElement("div");
+          el.className = "detection-item detection-found";
+          el.innerHTML = `
+            <span class="detection-path">${escapeHtml(row.path || "")}</span>
+            <span class="detection-arrow">→</span>
+            <span class="detection-label">${escapeHtml(row.label)}</span>
+          `;
+          container.appendChild(el);
+        });
+      }
+    }
 
     // Extra (unmatched) files: path → 未识别
     result.extra.forEach(item => {
@@ -4697,18 +5345,42 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
   }
 
-  function renderMissingItems(missing) {
+  function renderMissingItems(missing, result) {
     const container = document.getElementById("missing-list");
     const area = document.getElementById("missing-area");
     container.innerHTML = "";
 
-    if (missing.length === 0) {
+    // mergeIdCardDisplay 模式：从 missing 列表里剥离 id_card_front / id_card_back，
+    // 改由 buildIdCardDisplay 合成单条 missingRow（"身份证正反面" / "身份证正面" / "身份证反面"）。
+    const mergeIdCard = !!currentReqConfig?.mergeIdCardDisplay;
+    const idCardKeys = new Set(["id_card_front", "id_card_back"]);
+    const idDisplay = (mergeIdCard && result) ? buildIdCardDisplay(result) : null;
+    const filteredMissing = mergeIdCard
+      ? missing.filter(m => !idCardKeys.has(m.key))
+      : missing;
+
+    const idMissingRow = idDisplay?.missingRow || null;
+    const totalCount = filteredMissing.length + (idMissingRow ? 1 : 0);
+
+    if (totalCount === 0) {
       area.style.display = "none";
       return;
     }
 
     area.style.display = "";
-    missing.forEach(item => {
+
+    if (idMissingRow) {
+      const el = document.createElement("div");
+      el.className = "missing-item";
+      el.innerHTML = `
+        <span class="missing-icon">✗</span>
+        <span class="missing-label">缺少${escapeHtml(idMissingRow.label)}</span>
+        ${idMissingRow.required ? '<span class="missing-badge">必填</span>' : '<span class="missing-badge missing-optional">选填</span>'}
+      `;
+      container.appendChild(el);
+    }
+
+    filteredMissing.forEach(item => {
       const el = document.createElement("div");
       el.className = "missing-item";
 
@@ -4764,7 +5436,19 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   function renderResultSummary(result) {
     const container = document.getElementById("result-summary");
-    const missingRequired = result.missing.filter(f => f.required).length;
+    // mergeIdCardDisplay 模式：底层 missing 里 id_card_front + id_card_back 是 2 条，
+    // 但 UI 上合并显示为 1 行（"身份证正反面" / "身份证正面" / "身份证反面"），
+    // 缺失数也按 UI 行数计 —— 把这两条折算成 1（任一在 missing 即算 1）。
+    const mergeIdCard = !!currentReqConfig?.mergeIdCardDisplay;
+    let missingRequired;
+    if (mergeIdCard) {
+      const idCardKeys = new Set(["id_card_front", "id_card_back"]);
+      const others = result.missing.filter(f => f.required && !idCardKeys.has(f.key));
+      const idMissing = result.missing.some(f => f.required && idCardKeys.has(f.key));
+      missingRequired = others.length + (idMissing ? 1 : 0);
+    } else {
+      missingRequired = result.missing.filter(f => f.required).length;
+    }
 
     const allRequiredFound = missingRequired === 0;
     const statusClass = allRequiredFound ? "summary-pass" : "summary-fail";
