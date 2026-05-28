@@ -2,7 +2,7 @@
 
 > Chrome 扩展（Manifest V3）。给跨境电商「录单」场景的开发助手——按 **国家 × 注册地** 组合检查上传材料齐全度，AI 识别营业执照 / 身份证 / 完税证明 / 公司章程等关键证件，并把识别结果一键回填到目标平台的卖家中心；同时支持手写签名生成 + 注入、委托书自动盖章合成。
 
-当前已支持组合：**`Poland|China`（波兰销售 × 中国大陆注册）**、**`France|China`（法国销售 × 中国大陆注册）**、**`France|HongKong`（法国销售 × 香港注册）**。加新组合的标准流程见 [`ARCHITECTURE.md`](./ARCHITECTURE.md)。
+当前已支持组合：**`Poland|China`（波兰销售 × 中国大陆注册）**、**`France|China`（法国销售 × 中国大陆注册）**、**`France|HongKong`（法国销售 × 香港注册）**、**`Italy|China`（意大利销售 × 中国大陆注册）**。加新组合的标准流程见 [`ARCHITECTURE.md`](./ARCHITECTURE.md)。
 
 ---
 
@@ -10,19 +10,20 @@
 
 | # | 功能 | 说明 |
 |---|---|---|
-| 1 | **国家 × 注册地组合** | 不同组合（如 `Poland\|China`、`France\|China`、`France\|HongKong`）有不同的必填字段、必备文件、识别项、填表计划 |
+| 1 | **国家 × 注册地组合** | 不同组合（如 `Poland\|China`、`France\|China`、`France\|HongKong`、`Italy\|China`）有不同的必填字段、必备文件、识别项、填表计划 |
 | 2 | **拖拽文件夹上传** | 支持文件夹和单个文件，前端纯 JS 处理 |
-| 3 | **AI 文档识别** | 调 Moonshot（Kimi）vision 模型识别营业执照 / 身份证正反面 / 完税证明 / 公司章程 / 香港公司注册证书 CR / 护照等，输出结构化 JSON |
+| 3 | **AI 文档识别** | 调 Moonshot（Kimi）vision 模型识别营业执照 / 身份证正反面 / 完税证明 / 公司章程 / 香港公司注册证书 CR / 护照 / 企业信用报告等，输出结构化 JSON |
 | 4 | **PDF 多页识别** | 通过 `pdf.js` 拆页转图后逐页送 AI |
 | 5 | **xlsx 模板读取** | 读"基础信息表"单元格回填字段，支持 `fallbackCell` 主 cell 取空时按序回退备选 cell |
 | 6 | **缺失文件兜底** | 必填项缺失时可生成临时空白占位文件（jpg/pdf/png） |
 | 7 | **互斥文件组（二选一）** | 通过 `alternatives` 声明"身份证（正反面）**或**护照"这类二选一必填组，进度面板合成 `法人证件 (1/2)` 单行呈现 |
 | 8 | **委托书自动盖章** | `pdf-lib` 加载委托书 PDF 模板 + Canvas 生成公司圆章 → 合成带章 PDF；支持两种风格：大陆红章（弧形中文名 + 中心五角星）与香港深蓝章（弧形英文名 + 中心多行中文名 + 底部小星） |
 | 9 | **一键注入卖家中心** | 把识别 + 表格的字段按组合对应的 `autofill/<id>.js` 计划批量填到当前页面（DOM + cascader + 上传框） |
-| 10 | **身份流分支（identityFlow）** | 根据 AI 识别到的证件自动切换「身份证流程」或「护照流程」，字段级 `showIf` 控制各字段是否渲染（仅 `France\|HongKong` 使用） |
+| 10 | **身份流分支（identityFlow）** | 根据 AI 识别到的证件自动切换「身份证流程」或「护照流程」，字段级 `showIf` 控制各字段是否渲染（`France\|HongKong` 使用） |
 | 11 | **手写签名注入** | 本地用云烟体生成手写签名 → 上传 imgbb → MAIN world hook 拦截后端 signature 接口注入 URL |
 | 12 | **AI 地址翻译** | 护照流程下，xlsx 里的英文/拉丁详细地址会自动调 Kimi 翻译为简体中文（`xlsx_translate_to_zh` source） |
-| 13 | **全表清空** | 一键清掉当前页所有字段 / 上传 / 复选框，便于重测 |
+| 13 | **身份证正反面合并 PDF 上传** | `Italy\|China` 卖家中心要求法人身份证正反面合并为一份 PDF；自动用 pdf-lib 把两面（不论是图片、单页 PDF、多页 PDF）拼成多页 PDF 上传 |
+| 14 | **全表清空** | 一键清掉当前页所有字段 / 上传 / 复选框，便于重测 |
 
 ---
 
@@ -84,7 +85,8 @@ PL-tool2/
 ├── README.md                # 本文档
 ├── autofill/                # 自动填充积木（按 autofillModule ID 拆分，dynamic import）
 │   ├── poland_seller_center.js   # 波兰卖家中心 buildPlan
-│   └── france_seller_center.js   # 法国卖家中心 buildPlan（同时服务 France|China 与 France|HongKong）
+│   ├── france_seller_center.js   # 法国卖家中心 buildPlan（同时服务 France|China 与 France|HongKong）
+│   └── italy_seller_center.js    # 意大利卖家中心 buildPlan（Italy|China）
 ├── annex/                   # 附件合成模块（委托书 / 公章）
 │   ├── poa_composer.js      # pdf-lib 合成：模板 PDF + 章 PNG → 带章 PDF
 │   ├── seal_generator.js    # Canvas 渲染圆章：mainland 红章（弧形中文名+中心五角星）/ hk 深蓝章（弧形英文名+中心多行中文名+底部小星）

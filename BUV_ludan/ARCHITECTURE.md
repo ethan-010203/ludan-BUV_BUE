@@ -9,7 +9,7 @@
 
 ### 1.1 组合 (Combination)
 
-一个**组合** = `<国家>|<注册地>`，例如 `Poland|China`、`France|China`、`France|HongKong`。
+一个**组合** = `<国家>|<注册地>`，例如 `Poland|China`、`France|China`、`France|HongKong`、`Italy|China`。
 
 每个组合声明：
 
@@ -28,9 +28,9 @@
 
 | 积木类型 | 命名空间 | 当前已实现 | 描述 |
 |---|---|---|---|
-| AI 文档识别器 | `cn_business_license` / `cn_id_card_front` / `cn_id_card_back` / `cn_tax_cert` / `cn_company_articles` / `hk_business_registration` / `passport` | 是（写死在 `popup.js`，对应 `extractLicenseFields` / `extractIdCardFrontFields` / `extractIdCardBackFields` / `extractHkCrFields` / `extractPassportFields` 等） | 单一文档类型的 AI 分类 + 字段提取 |
-| 地址工具 | `zh-CN` | 是（写死在 `popup.js`，内置中国邮编查询 + 香港 18 区 cascader 三级解析 `resolveHkAddress`） | 省市区拆分、邮编查询、地区→省映射、HK 区议会选区识别 |
-| 自动填充模块 | `poland_seller_center` / `france_seller_center` | 是（已拆到 `autofill/<id>.js`，与 `popup.js` 顶部的 `AUTOFILL_REGISTRY` 动态 import）；`france_seller_center` 同时服务 `France\|China` 与 `France\|HongKong` | 平台卖家中心 DOM 注入计划（`buildPlan(input)` 返回 plan 数组） |
+| AI 文档识别器 | `cn_business_license` / `cn_id_card_front` / `cn_id_card_back` / `cn_tax_cert` / `cn_company_articles` / `cn_credit_report` / `hk_business_registration` / `passport` | 是（写死在 `popup.js`，对应 `extractLicenseFields` / `extractIdCardFrontFields` / `extractIdCardBackFields` / `extractCreditReportFields` / `extractHkCrFields` / `extractPassportFields` 等） | 单一文档类型的 AI 分类 + 字段提取 |
+| 地址工具 | `zh-CN` | 是（写死在 `popup.js`，内置中国邮编查询 + 香港 18 区 cascader 三级解析 `resolveHkAddress` + 县级市补全 + 不设区地级市镇级解析 + 非行政区"区"识别如"高新区"） | 省市区拆分、邮编查询、地区→省映射、HK 区议会选区识别 |
+| 自动填充模块 | `poland_seller_center` / `france_seller_center` / `italy_seller_center` | 是（已拆到 `autofill/<id>.js`，与 `popup.js` 顶部的 `AUTOFILL_REGISTRY` 动态 import）；`france_seller_center` 同时服务 `France\|China` 与 `France\|HongKong` | 平台卖家中心 DOM 注入计划（`buildPlan(input)` 返回 plan 数组） |
 | 附件合成器 | `poa_with_seal` | 是（`annex/poa_composer.js` + `annex/seal_generator.js`，由 `placeholders.<key>.kind` 调用；支持 `style: "mainland" / "hk"` 双风格） | 委托书 PDF 模板 + Canvas 圆章→ 带章 PDF（pdf-lib） |
 | xlsx 模板映射 | `basic_info_v1` | 是（单元格地址写死在 `modules.fields[].cell`，支持 `fallbackCell` 主 cell 空值回退） | 把基础信息表的单元格映射到字段 |
 
@@ -118,9 +118,15 @@
 | `ai_idcard_back` | 从 AI 识别的身份证反面取值 | `aiField` |
 | `ai_hk_cr` | 从 AI 识别的香港公司注册证书 CR 取值（如 `发出日期` → 公司成立日期） | `aiField` |
 | `ai_passport` | 从 AI 识别的护照取值 | `aiField` |
+| `ai_credit_report` | 从 AI 识别的企业信用报告取值（`Italy\|China` 用，含 公司名/统一社会信用代码/法定代表人/住所/经营期限/经营范围/核准日期/报告生成时间 等字段；多页 PDF 合并 partial 结果） | `aiField` |
 | `identity_field` | 身份证 / 护照通用字段——根据当前 identityFlow 自动从 `aiIdCardFront` 或 `aiPassport` 取值 | `idField`（身份证流取该字段名）+ `passportField`（护照流取该字段名） |
 | `passport_validity` | 把 AI 识别的护照"签发日期 - 有效期至"拼成有效期限字符串 | （无） |
+| `idcard_validity_start` | （`Italy\|China`）从 身份证反面 有效期限 原文拆出起始端 | （无） |
+| `idcard_validity_end` | （`Italy\|China`）从 身份证反面 有效期限 原文拆出结束端，"长期" 关键词原样保留 | （无） |
+| `business_term_end` | （`Italy\|China`）信用报告 营业期限至 为空 → 输出 `"长期"`，否则原日期 | （无） |
+| `license_credit_consistency` | （`Italy\|China`）对比 营业执照 与 信用报告 的 公司名/法定代表人/住所，输出 `"是"` / `"否（XXX不一致）"` | （无） |
 | `postal_from_idcard_address` | 从身份证地址查邮编 | （无） |
+| `postal_from_credit_report_address` | （`Italy\|China`）从信用报告住所字段查邮编 | （无） |
 | `idcard_or_passport` | 根据是否检测到身份证/护照返回 `"法人身份证"` / `"法人护照"` / 空 | （无） |
 | `platform_from_url` | 从 xlsx 一个店铺链接单元格推导「主要销售平台」（amazon→亚马逊 / aliexpress→速卖通 / temu→Temu / tiktok→TikTok / 其他→其他） | `urlCell`（如 `"C13"`） |
 | `default` | 硬编码默认值 | `value` |
@@ -160,6 +166,7 @@
 - `cn_id_card_back` —— 中国居民身份证国徽面
 - `cn_tax_cert` —— 中国完税证明（中国税收居民身份证明）
 - `cn_company_articles` —— 中国公司章程（`France|China` 组合使用）
+- `cn_credit_report` —— 中国企业信用信息公示报告（`Italy|China` 组合使用，多页 PDF 合并提取，含 公司名/统一社会信用代码/法定代表人/住所/经营期限/经营范围/核准日期/报告生成时间 等）
 - `hk_business_registration` —— 香港公司注册证书 CR / 商業登記證（`France|HongKong` 组合使用；AI 返回标签 `香港公司注册证书` → 映射到 label `香港公司注册证书CR`）
 - `passport` —— 护照（**地区无关**：识别 PASSPORT/护照 标题 + 国籍 / Nationality / 护照号 / MRZ 等护照专属字段；与 `cn_id_card_*` 在 `France|HongKong` 的 `legal_person_identity` 互斥组里"二选一"）
 
@@ -217,7 +224,9 @@
    ```js
    const AUTOFILL_REGISTRY = {
      poland_seller_center: () => import("./autofill/poland_seller_center.js"),
-     france_seller_center: () => import("./autofill/france_seller_center.js"), // ← 新增
+     france_seller_center: () => import("./autofill/france_seller_center.js"),
+     italy_seller_center: () => import("./autofill/italy_seller_center.js"),
+     // your_new_seller_center: () => import("./autofill/your_new_seller_center.js"), // ← 新增
    };
    ```
    启动时 `validateConfigBricks` 会检查所有组合声明的 `autofillModule` 都在注册表里，漏登记会在控制台报错。
@@ -248,6 +257,30 @@
 = 场景 C + 完全不一样的证件（KBIS、法国身份证、护照）+ `fr-FR` 地址体系。需在 `ai/` / `address/` 拆出后才够优雅。
 
 **预计工作量**：1 周以上。建议这种场景出现时再推动 Stage 2 重构。
+
+---
+
+## 3.5 `Italy|China` 组合实操记录
+
+`Italy|China` 是按场景 B 走完的真实例子。复用了 `cn_business_license` / `cn_id_card_front` / `cn_id_card_back` AI 识别器和 `zh-CN` 地址工具，新增了一个 `cn_credit_report`（企业信用报告）识别器和 `italy_seller_center` 自动填充模块。这里把过程中踩过、值得后续组合参考的坑列出来。
+
+**1. 多页 PDF 合并提取（`extractCreditReportFields`）**：企业信用报告通常 5–20 页 PDF，AI 单次只能处理一页。实现方式是 `pdf.js` 拆页 → 逐页 vision 调用 → 把所有页的 partial JSON 按"先到先得"合并为一个对象（每个字段被首次非空 partial 填上，后续 partial 不再覆盖）。提前终止条件：核心 4 字段（公司名 / 统一社会信用代码 / 住所 / 登记机关）都齐了就停。
+
+**2. 注册资本小数点陷阱**：信用报告里的数字常带定宽零，如 `2.000000万人民币` 实际是 2 万 = 20000 元，不是 2000000 元。AI prompt 里明确给出 `'2.000000万人民币' → '20000元'` 和 `'1.5万元' → '15000元'` 两个示例，并强调"先按面值乘以 10000 再四舍五入到整数 / 不要把小数点当千分位分隔符"，否则 AI 会把 `2.000000` 当成 `2000000` 直接用。
+
+**3. 法人身份证正反面合并 PDF 上传**：意大利卖家中心法人证件上传框 `accept=".pdf"` 且只接受一份文件。`autofill/italy_seller_center.js` 的 `buildIdCardCombinedPdf` 用 `pdf-lib` 处理三种来源情况：
+- 同一文件双键引用（AI 把"身份证正反面"整张合并图同时塞进 `id_card_front` + `id_card_back`）→ 直接当一份 PDF 传
+- 同一份多页 PDF 但路径带 `(第N页)` 后缀（多页 PDF 被逐页识别，正/反各落到不同页）→ 各自抽页（`copyPages`）拼成单一 PDF
+- 两份独立文件（jpg/png 各一）→ 各自 `embedJpg` / `embedPng`，失败 fallback 到 canvas 重编码再合并
+
+**4. `.btn_warp` 长期按钮的时序坑**：意大利页面有两个 `.btn_warp` 长期切换按钮（公司信息行 营业期限 + 法人代表行 身份证有效期限），DOM 结构和 textContent 完全相同。labelText 作用域定位不可靠（法人代表行的 label 被 Vue 拆成多段文本节点，`nodeValue.includes` 和 `ancestor.textContent.includes` 都无法 substring 命中）。当前方案：用 `pickIndex: 0` / `pickIndex: -1` 按 DOM 出现顺序定位（同时 `handleClick` 加了通用的 `pickIndex` 字段；`handleDatepicker` 也加了 placeholder 模式的 `pickIndex` 支持）。  
+**关键时序**：这两个 click 必须放 Phase 4（`afterPopup: true`），否则会被 Phase 1 的证件类型 radio 切换 / Phase 3 的 cascader / select 浮层联动重渲染撞掉，日志看着"已点击"实际状态没切。
+
+**5. 县级市补全 + 非行政"区"识别**（`splitAddressIntoRegionAndDetail`）：信用报告住所常见两类形态——
+- 省略地级市：`福州市义乌市XXX路` → 用 `CHINA_COUNTY_LEVEL_CITY_PARENTS` 把 `义乌市` 补成 `金华市/义乌市` 让 cascader 走完整三级
+- 城市后缀缺失：`福建省福州高新区...`（"福州"无"市"字 + "高新区"非行政区）→ `CHINA_PREFECTURE_TO_PROVINCE` 反查城市 stem 补 city；`NON_ADMIN_DISTRICT_RE` 识别 高新/经开/工业园/新/示范/保税 等伪行政区把它还回 detail；`handleCascader` 加了"中间级失配 + picked >= 1 时点第一个 leaf 强制 commit"兜底，避免 antd 不 commit 时连省+市都丢
+
+**6. 信用报告 / 营业执照一致性检查**（`license_credit_consistency` source）：对比 营业执照 与 信用报告 的 公司名/法定代表人/住所，输出 `"是"` / `"否（XXX不一致）"`，再喂给 `是否是最新的营业执照` radio（裁短为 `"是"` / `"否"`）。
 
 ---
 
@@ -299,11 +332,12 @@ PL-tool2/
   manifest.json                      # MV3 清单
   popup.html
   popup.css
-  popup.js                           # 主逻辑（~5000 行，~235 KB；UI / AI 调度 / 字段构建 / 委托书面板 / 手写签名 / 互斥组解析 / 身份流分支）
-  requirements.json                  # 全部组合配置（apiKey 已移至 chrome.storage.local；当前含 Poland|China / France|China / France|HongKong）
+  popup.js                           # 主逻辑（~5400 行，~250 KB；UI / AI 调度 / 字段构建 / 委托书面板 / 手写签名 / 互斥组解析 / 身份流分支 / 信用报告合并提取 / 县级市与非行政区识别）
+  requirements.json                  # 全部组合配置（apiKey 已移至 chrome.storage.local；当前含 Poland|China / France|China / France|HongKong / Italy|China）
   autofill/                          # ✅ 自动填充积木（已拆出）
     poland_seller_center.js
     france_seller_center.js          # 同时服务 France|China 与 France|HongKong
+    italy_seller_center.js           # Italy|China（含身份证正反面合并 PDF 上传 + 信用报告字段比对）
   annex/                             # ✅ 附件合成器（已拆出）
     poa_composer.js                  # pdf-lib 委托书合成
     seal_generator.js                # Canvas 公司圆章（mainland 红章 / hk 深蓝章双风格）
